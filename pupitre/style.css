@@ -1,0 +1,20 @@
+body {
+    display: flex;
+    flex-direction: column;
+    font-size: 50px;
+}
+label {
+    margin: 10px;
+}
+button {
+    font-size: 25px;
+    margin: 5px
+}
+.row {
+    display: flex;
+    flex-direction: row;
+}
+input[type="range"] {
+    width:400px;
+  }
+
