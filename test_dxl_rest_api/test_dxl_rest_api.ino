@@ -16,6 +16,10 @@ Dynamixel2Arduino dxl(DXL_SERIAL, DXL_DIR_PIN);
 using namespace ControlTableItem;
 
 bool led = 1;
+float pos[7];
+long t,t0;
+float pos0,posm;
+float pos_t;
 StaticJsonDocument<250> jsonDocument;
 char buffer[250];
 void create_json(char *tag, float value, char *unit) {  
@@ -36,22 +40,6 @@ void add_json_object(char *tag, float value, char *unit) {
 WebServer server(8080);
 
 void setup() {
-  pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, 0);
-  Serial1.setRX(1);
-  Serial1.setTX(0);
-  dxl.begin(1000000);
-  dxl.setPortProtocolVersion(DXL_PROTOCOL_VERSION);
-  dxl.ping(DXL_ID);
-  dxl.torqueOff(DXL_ID);
-  dxl.setOperatingMode(DXL_ID, OP_POSITION);
-  dxl.torqueOn(DXL_ID);
-  dxl.writeControlTableItem(MOVING_SPEED, DXL_ID, 0);
-  dxl.writeControlTableItem(LED, DXL_ID, 4);
-  dxl.writeControlTableItem(P_GAIN, DXL_ID, 32);
-  dxl.writeControlTableItem(I_GAIN, DXL_ID, 20);
-  dxl.writeControlTableItem(D_GAIN, DXL_ID, 0);
-  
   Serial.begin(115200);
   Serial.print("Connecting to ");
   Serial.println(SSID);
@@ -98,16 +86,70 @@ void setLed() {
   }
 }
 
+// Function to split a string and store the integers in an array
+void stringToFloatArray(String inputString, float outputArray[], int arraySize) {
+  int index = 0;
+  String number = "";
+  
+  for (int i = 0; i < inputString.length(); i++) {
+    char currentChar = inputString.charAt(i);
+    
+    if (currentChar == ',') {
+      outputArray[index] = number.toFloat();
+      number = "";
+      index++;
+    } else {
+      number += currentChar;
+    }
+  }
+  
+  outputArray[index] = number.toFloat(); // Store the last number
+}
+
 void setServo() {
   if (server.hasArg("plain") == false) {
     //Serial.println("no plain arg");
   }else{
     String body = server.arg("plain");
-    dxl.setGoalPosition(DXL_ID, body.toInt());
+    pos0=pos_t;
+    stringToFloatArray(body, pos, 7);
+    t0=millis();
+    
     server.send(200, "application/json", "{}");
   }
 }
 
 void loop() {
   server.handleClient();
+}
+
+void setup1(){
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, 0);
+  Serial1.setRX(1);
+  Serial1.setTX(0);
+  dxl.begin(1000000);
+  dxl.setPortProtocolVersion(DXL_PROTOCOL_VERSION);
+  dxl.ping(DXL_ID);
+  dxl.torqueOff(DXL_ID);
+  dxl.setOperatingMode(DXL_ID, OP_POSITION);
+  dxl.torqueOn(DXL_ID);
+  dxl.writeControlTableItem(MOVING_SPEED, DXL_ID, 0);
+  dxl.writeControlTableItem(LED, DXL_ID, 4);
+  dxl.writeControlTableItem(P_GAIN, DXL_ID, 32);
+  dxl.writeControlTableItem(I_GAIN, DXL_ID, 0);
+  dxl.writeControlTableItem(D_GAIN, DXL_ID, 0);
+}
+
+void loop1(){
+  t = millis();
+  //posm = (float)dxl.getPresentPosition(DXL_ID);
+  //Serial.println(posm);
+  if(t<t0+pos[0]*10){
+    pos_t = pos0+(t-t0)*(pos[1]-pos0)/(pos[0]*10);
+  }else{
+    pos_t = pos[1];
+  }
+  dxl.setGoalPosition(DXL_ID, pos_t);
+  delay(10);
 }

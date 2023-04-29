@@ -37,11 +37,11 @@ document.getElementById("bar").addEventListener("input", function () {
     fetch("http://" + IProbot + "/setservo", {
         mode: 'no-cors',
         method: 'POST',
-        body: document.getElementById("bar").value,
+        body: [500,document.getElementById("bar").value,document.getElementById("bar").value,document.getElementById("bar").value,document.getElementById("bar").value,document.getElementById("bar").value,document.getElementById("bar").value],
         headers: { "Content-Type": "application/json;charset=UTF-8"}
     })
 });
 
 setInterval(function(){
     getLed(IProbot);
-},100);
+},1000);
