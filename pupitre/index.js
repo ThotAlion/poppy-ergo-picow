@@ -37,7 +37,7 @@ document.getElementById("bar").addEventListener("input", function () {
     fetch("http://" + IProbot + "/setservo", {
         mode: 'no-cors',
         method: 'POST',
-        body: [500,document.getElementById("bar").value,document.getElementById("bar").value,document.getElementById("bar").value,document.getElementById("bar").value,document.getElementById("bar").value,document.getElementById("bar").value],
+        body: [100,document.getElementById("bar").value,document.getElementById("bar").value,document.getElementById("bar").value,document.getElementById("bar").value,document.getElementById("bar").value,document.getElementById("bar").value],
         headers: { "Content-Type": "application/json;charset=UTF-8"}
     })
 });
