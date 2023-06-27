@@ -9,13 +9,13 @@ const char *SSID = "NETGEAR16";
 const char *PWD = "cloudywindow854";
 
 #define DXL_SERIAL   Serial1
-const uint8_t BROADCAST_ID = 254;
-const int DXL_DIR_PIN = 2; // DYNAMIXEL Shield DIR PIN
-const uint8_t DXL_ID_CNT = 1;
-const uint8_t DXL_ID_LIST[DXL_ID_CNT] = {1};
-const uint16_t user_pkt_buf_cap = 128;
-uint8_t user_pkt_buf[user_pkt_buf_cap];
-const float DXL_PROTOCOL_VERSION = 2.0;
+const uint8_t BROADCAST_ID = 254;                       //broadcast address
+const int DXL_DIR_PIN = 2;                              // DYNAMIXEL Shield DIR PIN
+const uint8_t DXL_ID_CNT = 6;                           // Number of motors
+const uint8_t DXL_ID_LIST[DXL_ID_CNT] = {1,2,3,4,5,6};  // List of addresses
+const uint16_t user_pkt_buf_cap = 128;                  // length of buffer of transmission
+uint8_t user_pkt_buf[user_pkt_buf_cap];                 // buffer of transmission
+const float DXL_PROTOCOL_VERSION = 2.0;                 // version of protocol (2.0 for XL-320)
 
 // Starting address of the Data to read; Present Position = 37
 const uint16_t SR_START_ADDR = 37;
@@ -45,11 +45,14 @@ Dynamixel2Arduino dxl(DXL_SERIAL, DXL_DIR_PIN);
 using namespace ControlTableItem;
 
 bool led = 1;
-float pos[7];
+float order[7] = {200,512,512,512,512,512,512};
 long t,t0;
-float pos0,posm;
-float pos_t;
+float pos0[6] = {512,512,512,512,512,512};
+float posm[6] = {512,512,512,512,512,512};
+float pos_t[6] = {512,512,512,512,512,512};
 uint8_t i;
+uint8_t recv_cnt;
+
 StaticJsonDocument<250> jsonDocument;
 char buffer[250];
 void create_json(char *tag, float value, char *unit) {  
@@ -132,19 +135,17 @@ void stringToFloatArray(String inputString, float outputArray[], int arraySize) 
       number += currentChar;
     }
   }
-  
   outputArray[index] = number.toFloat(); // Store the last number
 }
 
 void setServo() {
-  if (server.hasArg("plain") == false) {
-    //Serial.println("no plain arg");
-  }else{
+  if (server.hasArg("plain") == true) {
     String body = server.arg("plain");
-    pos0=posm;
-    stringToFloatArray(body, pos, 7);
+    for(i = 0; i < DXL_ID_CNT; i++){
+      pos0[i]=posm[i];
+    }
     t0=millis();
-    
+    stringToFloatArray(body, order, 7);
     server.send(200, "application/json", "{}");
   }
 }
@@ -158,12 +159,11 @@ void setup1(){
   digitalWrite(LED_BUILTIN, 0);
   Serial1.setRX(1);
   Serial1.setTX(0);
-  dxl.begin(1000000);
+  dxl.begin(115200);
   dxl.setPortProtocolVersion(DXL_PROTOCOL_VERSION);
+  
   for(i = 0; i < DXL_ID_CNT; i++){
-    dxl.torqueOn(BROADCAST_ID);
-    dxl.ping(DXL_ID_LIST[i]);
-    dxl.torqueOff(DXL_ID_LIST[i]);
+    //dxl.reboot(DXL_ID_LIST[i], 10);
     dxl.setOperatingMode(DXL_ID_LIST[i], OP_POSITION);
     dxl.torqueOn(DXL_ID_LIST[i]);
     dxl.writeControlTableItem(MOVING_SPEED, DXL_ID_LIST[i], 0);
@@ -172,8 +172,6 @@ void setup1(){
     dxl.writeControlTableItem(I_GAIN, DXL_ID_LIST[i], 0);
     dxl.writeControlTableItem(D_GAIN, DXL_ID_LIST[i], 0);
   }
-  
-  
   // Fill the members of structure to syncRead using external user packet buffer
   sr_infos.packet.p_buf = user_pkt_buf;
   sr_infos.packet.buf_capacity = user_pkt_buf_cap;
@@ -208,29 +206,37 @@ void setup1(){
 
 void loop1(){
   t = millis();
-  if(t<t0+pos[0]*10){
-    pos_t = pos0+(t-t0)*(pos[1]-pos0)/(pos[0]*10);
-  }else{
-    pos_t = pos[1];
-  }
-  // put your main code here, to run repeatedly:
-  static uint32_t try_count = 0;
-  uint8_t i, recv_cnt;
-  
-  // Insert a new Goal Position to the SyncWrite Packet
+  sw_infos.is_info_changed = false;
   for(i = 0; i < DXL_ID_CNT; i++){
-    sw_data[i].goal_position = pos_t;
+    posm[i] = dxl.getPresentPosition(DXL_ID_LIST[i]);
+    //Serial.print(DXL_ID_LIST[i]);Serial.print(":M:");Serial.println(posm[i]);
+    if(t<t0+order[0]*10){
+      pos_t[i] = pos0[i]+(t-t0)*(order[i+1]-pos0[i])/(order[0]*10);
+    }else{
+      pos_t[i] = order[i+1];
+    }
+    dxl.setGoalPosition(DXL_ID_LIST[i], pos_t[i]);
+    //Serial.print(DXL_ID_LIST[i]);Serial.print(":C:");Serial.println(pos_t[i]);
+//    sw_data[i].goal_position = pos_t[i];
+//    sw_infos.is_info_changed = true;
   }
 
   // Update the SyncWrite packet status
-  sw_infos.is_info_changed = true;
-  
-  dxl.syncWrite(&sw_infos);
-  recv_cnt = dxl.syncRead(&sr_infos);
-  if(recv_cnt > 0) {
-    for(i = 0; i<recv_cnt; i++){
-        posm = sr_data[i].present_position;
-    }
-  }
-  delay(10);
+//  sw_infos.is_info_changed = true;
+//  if(pos_t>0){
+//    dxl.syncWrite(&sw_infos);
+//  }
+//  else{
+//    dxl.torqueOff(BROADCAST_ID);
+//  }
+  //Serial.print(DXL_ID_LIST[i]);Serial.print(":M:");Serial.println(posm[i]);
+  //delay(50);
+//  recv_cnt = dxl.syncRead(&sr_infos);
+//  if(recv_cnt > 0) {
+//    for(i = 0; i<recv_cnt; i++){
+//        posm[i] = sr_data[i].present_position;
+//        //Serial.print(DXL_ID_LIST[i]);Serial.print(":M:");Serial.println(posm[i]);
+//    }
+//  }
+//  delay(10);
 }
